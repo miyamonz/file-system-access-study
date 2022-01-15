@@ -1,13 +1,31 @@
 import { useState } from "react";
+import { atom, useAtom } from "jotai";
+import { get, set } from "idb-keyval";
+import { VideoViewer } from "./VideoViewer";
+
+const prevFileHandle = await get("lastFileHandle");
+if (prevFileHandle) {
+}
+const fileHandleAtom = atom<FileSystemFileHandle | null>(
+  prevFileHandle ?? null
+);
+const fileHandleAtomWithPersistence = atom(
+  (get) => get(fileHandleAtom),
+  (get, setAtom, newHandle) => {
+    console.log(newHandle);
+    setAtom(fileHandleAtom, newHandle);
+    set("lastFileHandle", newHandle).then(console.log);
+  }
+);
 
 function App() {
-  const [url, setUrl] = useState("");
+  const [fileHandle, setFileHandle] = useAtom(fileHandleAtomWithPersistence);
+
+  const [ok, setOk] = useState(false);
 
   async function getFile() {
     const fileHandle = await openFile();
-    const fileData = await fileHandle.getFile();
-    const src = URL.createObjectURL(fileData);
-    setUrl(src);
+    setFileHandle(fileHandle);
   }
 
   return (
@@ -20,14 +38,27 @@ function App() {
       >
         open
       </button>
-      <video controls src={url} style={{ width: "100vw" }}></video>
+      {fileHandle && (
+        <button
+          onClick={() => {
+            fileHandle.requestPermission({ mode: "read" }).then((res) => {
+              if (res === "granted") {
+                setOk(true);
+              }
+            });
+          }}
+        >
+          {fileHandle.name}
+        </button>
+      )}
+      {fileHandle && ok && <VideoViewer fileHandle={fileHandle} />}
     </div>
   );
 }
 
 export default App;
 
-export async function openFile(): Promise<FileSystemFileHandle> {
+async function openFile(): Promise<FileSystemFileHandle> {
   const [fileHandle] = await window.showOpenFilePicker({
     multiple: false,
   });
